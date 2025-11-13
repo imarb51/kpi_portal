@@ -109,7 +109,7 @@
                                         <th style="width: 10%;">Score (0-5)</th>
                                         <th style="width: 12%;">Weighted Score</th>
                                         <th style="width: 15%;">Category</th>
-                                        <th style="width: 18%;">Description</th>
+                                        <th style="width: 18%;">Remark</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -173,7 +173,7 @@
                                                 <span class="badge badge-info"><?= htmlspecialchars($kpi->category_name) ?></span>
                                             </td>
                                             <td>
-                                                <small class="text-muted"><?= htmlspecialchars($kpi->description ?: 'N/A') ?></small>
+                                                <small class="text-muted"><?= htmlspecialchars($kpi->remark ?: 'N/A') ?></small>
                                             </td>
                                         </tr>
                                         <?php endforeach; ?>
@@ -212,61 +212,213 @@
                         <!-- Chat Conversation (if exists) -->
                         <?php if ($has_chat_conversation): ?>
                         <hr>
-                        <div class="card border-info">
-                            <div class="card-header bg-info text-white">
-                                <h6 class="mb-0">
-                                    <i class="fas fa-comments"></i> Conversation with Manager
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <!-- Chat Messages -->
-                                <div class="chat-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; background-color: #f8f9fa;">
-                                    <?php foreach ($chat_messages as $msg): ?>
-                                        <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
-                                            <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
-                                                <div class="mb-1">
-                                                    <strong>
-                                                        <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
-                                                            <i class="fas fa-user text-primary"></i> You
-                                                        <?php else: ?>
-                                                            <i class="fas fa-user-tie text-success"></i> <?= $msg->first_name . ' ' . $msg->last_name ?>
-                                                        <?php endif; ?>
-                                                    </strong>
-                                                    <small class="text-muted">(<?= $msg->sender_type ?>)</small>
-                                                </div>
-                                                <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
-                                                <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
+                        
+                        <?php if (isset($show_both_chats) && $show_both_chats): ?>
+                            <!-- SETUP MODE CONVERSATION (Read-Only / Collapsed) -->
+                            <?php if (!empty($setup_chat_messages)): ?>
+                            <div class="card border-secondary mb-3">
+                                <div class="card-header bg-secondary text-white" style="cursor: pointer;" data-toggle="collapse" data-target="#setupConversation">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-history"></i> Setup Mode Discussion (Completed)
+                                        <small class="float-right"><i class="fas fa-chevron-down"></i></small>
+                                    </h6>
                                 </div>
-
-                                <!-- Employee Response Form -->
-                                <?php if ($chat_is_locked): ?>
-                                    <div class="alert alert-info mb-0">
-                                        <i class="fas fa-lock"></i> <strong>Conversation Locked</strong><br>
-                                        You have agreed to the KPIs. The conversation has been closed.
-                                    </div>
-                                <?php else: ?>
-                                    <form method="post" action="<?= base_url('employee/send_kpi_reply') ?>">
-                                        <input type="hidden" name="employee_kpi_id" value="<?= $chat_employee_kpi_id ?>">
-                                        <input type="hidden" name="period_id" value="<?= $selected_period->period_id ?>">
-                                        <div class="form-group mb-2">
-                                            <textarea name="message" class="form-control" rows="3" 
-                                                      placeholder="Type your reply here..." required></textarea>
+                                <div id="setupConversation" class="collapse">
+                                    <div class="card-body" style="background-color: #f5f5f5;">
+                                        <!-- Setup Chat Messages -->
+                                        <div class="chat-container" style="max-height: 250px; overflow-y: auto; padding: 10px;">
+                                            <?php foreach ($setup_chat_messages as $msg): ?>
+                                                <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
+                                                    <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
+                                                        <div class="mb-1">
+                                                            <strong>
+                                                                <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
+                                                                    <i class="fas fa-user text-primary"></i> You
+                                                                <?php else: ?>
+                                                                    <i class="fas fa-user-tie text-success"></i> <?= $msg->first_name . ' ' . $msg->last_name ?>
+                                                                <?php endif; ?>
+                                                            </strong>
+                                                            <small class="text-muted">(<?= $msg->sender_type ?>)</small>
+                                                        </div>
+                                                        <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
+                                                        <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
                                         </div>
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-paper-plane"></i> Send Reply
-                                        </button>
-                                    </form>
-                                <?php endif; ?>
+                                        <div class="alert alert-secondary mb-0 mt-2">
+                                            <i class="fas fa-check-circle"></i> <strong>Setup Phase Completed</strong> - This conversation is now read-only.
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                            <?php endif; ?>
+                            
+                            <!-- SCORING MODE CONVERSATION (Active or Read-Only based on finalization) -->
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-comments"></i> Performance Evaluation Discussion
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Scoring Chat Messages -->
+                                    <div class="chat-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; background-color: #f8f9fa;">
+                                        <?php if (!empty($scoring_chat_messages)): ?>
+                                            <?php foreach ($scoring_chat_messages as $msg): ?>
+                                                <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
+                                                    <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
+                                                        <div class="mb-1">
+                                                            <strong>
+                                                                <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
+                                                                    <i class="fas fa-user text-primary"></i> You
+                                                                <?php else: ?>
+                                                                    <i class="fas fa-user-tie text-success"></i> <?= $msg->first_name . ' ' . $msg->last_name ?>
+                                                                <?php endif; ?>
+                                                            </strong>
+                                                            <small class="text-muted">(<?= $msg->sender_type ?>)</small>
+                                                        </div>
+                                                        <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
+                                                        <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
+                                                    </div>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <p class="text-muted text-center mb-0">No scoring discussion yet.</p>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <!-- Employee Response Form -->
+                                    <?php if ($chat_is_locked): ?>
+                                        <div class="alert alert-success mb-0">
+                                            <i class="fas fa-lock"></i> <strong>Performance Evaluation Completed</strong><br>
+                                            You have accepted the final report. The conversation has been closed.
+                                        </div>
+                                    <?php else: ?>
+                                        <form method="post" action="<?= base_url('employee/send_kpi_reply') ?>">
+                                            <input type="hidden" name="employee_kpi_id" value="<?= $chat_employee_kpi_id ?>">
+                                            <input type="hidden" name="period_id" value="<?= $selected_period->period_id ?>">
+                                            <div class="form-group mb-2">
+                                                <textarea name="message" class="form-control" rows="3" 
+                                                          placeholder="Type your reply here..." required></textarea>
+                                            </div>
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="fas fa-paper-plane"></i> Send Reply
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        
+                        <?php else: ?>
+                            <!-- SINGLE CONVERSATION (Setup Mode Only) -->
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-comments"></i> Conversation with Manager
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <!-- Chat Messages -->
+                                    <div class="chat-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; background-color: #f8f9fa;">
+                                        <?php foreach ($chat_messages as $msg): ?>
+                                            <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
+                                                <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
+                                                    <div class="mb-1">
+                                                        <strong>
+                                                            <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
+                                                                <i class="fas fa-user text-primary"></i> You
+                                                            <?php else: ?>
+                                                                <i class="fas fa-user-tie text-success"></i> <?= $msg->first_name . ' ' . $msg->last_name ?>
+                                                            <?php endif; ?>
+                                                        </strong>
+                                                        <small class="text-muted">(<?= $msg->sender_type ?>)</small>
+                                                    </div>
+                                                    <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
+                                                    <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+
+                                    <!-- Employee Response Form -->
+                                    <?php if ($chat_is_locked): ?>
+                                        <div class="alert alert-info mb-0">
+                                            <i class="fas fa-lock"></i> <strong>Conversation Locked</strong><br>
+                                            You have agreed to the KPIs. The conversation has been closed.
+                                        </div>
+                                    <?php else: ?>
+                                        <form method="post" action="<?= base_url('employee/send_kpi_reply') ?>">
+                                            <input type="hidden" name="employee_kpi_id" value="<?= $chat_employee_kpi_id ?>">
+                                            <input type="hidden" name="period_id" value="<?= $selected_period->period_id ?>">
+                                            <div class="form-group mb-2">
+                                                <textarea name="message" class="form-control" rows="3" 
+                                                          placeholder="Type your reply here..." required></textarea>
+                                            </div>
+                                            <button type="submit" class="btn btn-primary">
+                                                <i class="fas fa-paper-plane"></i> Send Reply
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                         <?php endif; ?>
 
-                        <!-- Agreement Buttons (shown until employee agrees) -->
-                        <?php if (!$has_agreed): ?>
+                        <!-- Action Buttons Based on Workflow Phase -->
                         <hr>
+                        <?php if ($is_finalized): ?>
+                        <!-- Finalized: Review complete -->
+                        <div class="card border-success">
+                            <div class="card-body">
+                                <h6 class="mb-3 text-success">
+                                    <i class="fas fa-check-circle"></i> 
+                                    Performance Review Finalized
+                                </h6>
+                                <div class="alert alert-success mb-0">
+                                    <strong><i class="fas fa-info-circle"></i> Your performance review for this period has been completed and finalized.</strong><br>
+                                    <small class="text-muted">
+                                        • All scores have been accepted<br>
+                                        • No further changes can be made<br>
+                                        • This review is now locked for this period
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <?php elseif ($in_scoring_mode): ?>
+                        <!-- Scoring Mode: Manager is adding scores -->
+                        <div class="card border-info">
+                            <div class="card-body">
+                                <h6 class="mb-3">
+                                    <i class="fas fa-chart-line"></i> 
+                                    Performance Evaluation in Progress
+                                </h6>
+                                <div class="row">
+                                    <div class="col-md-7">
+                                        <small class="text-muted">
+                                            <strong>Your manager is evaluating your performance.</strong><br>
+                                            • Review your scores above<br>
+                                            • Request changes if needed via chat<br>
+                                            • Click "Accept Final Report" when you agree with all scores
+                                        </small>
+                                    </div>
+                                    <div class="col-md-5 text-right">
+                                        <form method="post" action="<?= base_url('employee/finalize_kpis') ?>" style="display:inline;" onsubmit="return confirm('Are you sure you accept all scores and want to finalize this performance review? This action cannot be undone.')">
+                                            <input type="hidden" name="period_id" value="<?= $selected_period->period_id ?>">
+                                            <button type="submit" class="btn btn-success btn-lg">
+                                                <i class="fas fa-check-double"></i> Accept Final Report
+                                            </button>
+                                        </form>
+                                        <a href="<?= base_url('employee/request_kpi_edit') ?>?period_id=<?= $selected_period->period_id ?>" 
+                                           class="btn btn-warning btn-lg">
+                                            <i class="fas fa-edit"></i> Request Changes
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php else: ?>
+                        <!-- Setup Mode: Employee needs to agree to KPIs -->
                         <div class="card border-warning">
                             <div class="card-body">
                                 <h6 class="mb-3">
@@ -282,7 +434,7 @@
                                         </small>
                                     </div>
                                     <div class="col-md-5 text-right">
-                                        <form method="post" action="<?= base_url('employee/agree_all_kpis') ?>" style="display:inline;" onsubmit="return confirm('Are you sure you agree with all assigned KPIs and their weightages? This will lock the KPIs and end the conversation.')">
+                                        <form method="post" action="<?= base_url('employee/agree_all_kpis') ?>" style="display:inline;" onsubmit="return confirm('Are you sure you agree with all assigned KPIs and their weightages? This will move to performance evaluation phase.')">
                                             <input type="hidden" name="period_id" value="<?= $selected_period->period_id ?>">
                                             <button type="submit" class="btn btn-success btn-lg">
                                                 <i class="fas fa-check-circle"></i> I Agree

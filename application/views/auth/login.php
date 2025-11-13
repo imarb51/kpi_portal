@@ -46,14 +46,7 @@
                         </button>
                     </form>
                     
-                    <div class="mt-4 text-center">
-                        <small class="text-muted">
-                            Test Credentials:<br>
-                            Manager: arjun.patel@example.com<br>
-                            Employee: rahul.sharma@example.com<br>
-                            Password: password123
-                        </small>
-                    </div>
+                    
                 </div>
             </div>
         </div>

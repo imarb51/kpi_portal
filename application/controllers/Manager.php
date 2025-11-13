@@ -92,19 +92,55 @@ class Manager extends CI_Controller {
         
         if (!empty($data['kpis'])) {
             foreach ($data['kpis'] as $kpi) {
-                // Get chat messages first
-                $chat_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id);
-                
-                // Show chat if there are any messages (regardless of locked/agreed status)
-                if (!empty($chat_messages) || $kpi->employee_agreement_status === 'REQUESTED_EDIT') {
+                // Determine which phase messages to show
+                if (isset($kpi->is_finalized) && $kpi->is_finalized == 1) {
+                    // Finalized: Show both setup and scoring messages (read-only)
+                    $setup_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SETUP');
+                    $scoring_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SCORING');
+                    
                     $data['has_bulk_edit_request'] = true;
                     $data['bulk_edit_notes'] = $kpi->employee_agreement_notes;
                     $data['bulk_edit_date'] = $kpi->employee_agreement_date;
                     $data['edit_request_status'] = $kpi->employee_agreement_status;
                     $data['edit_request_employee_kpi_id'] = $kpi->employee_kpi_id;
-                    $data['chat_messages'] = $chat_messages;
-                    $data['chat_is_locked'] = $kpi->is_locked || $kpi->employee_agreement_status === 'AGREED';
+                    $data['setup_chat_messages'] = $setup_messages;
+                    $data['scoring_chat_messages'] = $scoring_messages;
+                    $data['show_both_chats'] = true;
+                    $data['chat_is_locked'] = true;
                     break;
+                    
+                } elseif ($kpi->employee_agreement_status === 'AGREED') {
+                    // Scoring Mode: Show setup (read-only) and scoring (active)
+                    $setup_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SETUP');
+                    $scoring_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SCORING');
+                    
+                    $data['has_bulk_edit_request'] = true;
+                    $data['bulk_edit_notes'] = $kpi->employee_agreement_notes;
+                    $data['bulk_edit_date'] = $kpi->employee_agreement_date;
+                    $data['edit_request_status'] = $kpi->employee_agreement_status;
+                    $data['edit_request_employee_kpi_id'] = $kpi->employee_kpi_id;
+                    $data['setup_chat_messages'] = $setup_messages;
+                    $data['scoring_chat_messages'] = $scoring_messages;
+                    $data['show_both_chats'] = true;
+                    $data['chat_is_locked'] = false; // Active chat in scoring
+                    break;
+                    
+                } else {
+                    // Setup Mode: Show only setup phase messages
+                    $chat_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SETUP');
+                    
+                    // Show chat if there are any messages or edit requested
+                    if (!empty($chat_messages) || $kpi->employee_agreement_status === 'REQUESTED_EDIT') {
+                        $data['has_bulk_edit_request'] = true;
+                        $data['bulk_edit_notes'] = $kpi->employee_agreement_notes;
+                        $data['bulk_edit_date'] = $kpi->employee_agreement_date;
+                        $data['edit_request_status'] = $kpi->employee_agreement_status;
+                        $data['edit_request_employee_kpi_id'] = $kpi->employee_kpi_id;
+                        $data['chat_messages'] = $chat_messages;
+                        $data['show_both_chats'] = false;
+                        $data['chat_is_locked'] = false;
+                        break;
+                    }
                 }
             }
         }
@@ -488,6 +524,14 @@ class Manager extends CI_Controller {
         $employee = $this->employee_model->get_by_id($employee_id);
         
         if ($this->input->method() === 'post') {
+            // Check if employee has already agreed BEFORE any processing
+            // This determines if we're in "Setup Mode" or "Scoring Mode"
+            $current_kpis = $this->kpi_model->get_employee_kpis($employee_id, $period_id);
+            $employee_has_agreed = false;
+            if (!empty($current_kpis)) {
+                $employee_has_agreed = ($current_kpis[0]->employee_agreement_status === 'AGREED');
+            }
+            
             // Process KPI updates
             $kpis = $this->input->post('kpis');
             $new_kpis = $this->input->post('new_kpis');
@@ -549,6 +593,7 @@ class Manager extends CI_Controller {
                             'employee_kpi_id' => $employee_kpi_id,
                             'weightage' => floatval($new_kpi['weightage']),
                             'score' => !empty($new_kpi['score']) ? floatval($new_kpi['score']) : NULL,
+                            'remark' => !empty($new_kpi['remark']) ? $new_kpi['remark'] : NULL,
                             'last_edited_by' => $manager_id,
                             'last_edited_at' => date('Y-m-d H:i:s')
                         ];
@@ -615,50 +660,57 @@ class Manager extends CI_Controller {
                         $update_data['score'] = floatval($kpi_data['score']);
                     }
                     
+                    // Update remark if provided (per-employee remark for scoring)
+                    if (isset($kpi_data['remark'])) {
+                        $update_data['remark'] = $kpi_data['remark'];
+                    }
+                    
                     $this->db->where('employee_kpi_id', $kpi_id);
                     $this->db->update('kpi_scores', $update_data);
-                    
-                    // Update description/remark in kpi_templates if provided
-                    if (isset($kpi_data['description'])) {
-                        // Get template_id for this employee_kpi
-                        $this->db->select('template_id');
-                        $this->db->from('employee_kpis');
-                        $this->db->where('employee_kpi_id', $kpi_id);
-                        $template_result = $this->db->get()->row();
-                        
-                        if ($template_result) {
-                            $this->db->where('template_id', $template_result->template_id);
-                            $this->db->update('kpi_templates', ['description' => $kpi_data['description']]);
-                        }
-                    }
                 }
             }
             
-            // Update agreement status to PENDING with manager's response
-            $this->db->where('employee_id', $employee_id);
-            $this->db->where('review_period_id', $period_id);
-            $this->db->update('employee_kpis', [
-                'employee_agreement_status' => 'PENDING',
-                'employee_agreement_date' => NULL,
-                'employee_agreement_notes' => NULL,
-                'manager_response_notes' => $manager_notes,
-                'manager_responded_at' => date('Y-m-d H:i:s'),
-                'manager_responded_by' => $user_id
-            ]);
-            
-            // Send notification to employee
-            $this->load->helper('email');
-            $manager = $this->employee_model->get_by_id($manager_id);
-            
-            // Get period details
-            $period = $this->db->get_where('review_periods', ['period_id' => $period_id])->row();
-            
-            // Send email notification
-            if (!empty($employee->email)) {
-                notify_kpi_updated($employee->email, $employee, $manager, $period, $manager_notes);
+            // Only reset agreement status if employee has not agreed yet
+            // If already agreed, we're just updating scores, so keep the agreement
+            if (!$employee_has_agreed) {
+                $this->db->where('employee_id', $employee_id);
+                $this->db->where('review_period_id', $period_id);
+                $this->db->update('employee_kpis', [
+                    'employee_agreement_status' => 'PENDING',
+                    'employee_agreement_date' => NULL,
+                    'employee_agreement_notes' => NULL,
+                    'manager_response_notes' => $manager_notes,
+                    'manager_responded_at' => date('Y-m-d H:i:s'),
+                    'manager_responded_by' => $user_id
+                ]);
+            } else {
+                // Just update manager notes without resetting agreement
+                $this->db->where('employee_id', $employee_id);
+                $this->db->where('review_period_id', $period_id);
+                $this->db->update('employee_kpis', [
+                    'manager_response_notes' => $manager_notes,
+                    'manager_responded_at' => date('Y-m-d H:i:s'),
+                    'manager_responded_by' => $user_id
+                ]);
             }
             
-            $this->session->set_flashdata('success', 'KPIs updated successfully. Employee has been notified to review changes.');
+            // Send notification to employee only if agreement was reset
+            if (!$employee_has_agreed) {
+                $this->load->helper('email');
+                $manager = $this->employee_model->get_by_id($manager_id);
+                
+                // Get period details
+                $period = $this->db->get_where('review_periods', ['period_id' => $period_id])->row();
+                
+                // Send email notification
+                if (!empty($employee->email)) {
+                    notify_kpi_updated($employee->email, $employee, $manager, $period, $manager_notes);
+                }
+                
+                $this->session->set_flashdata('success', 'KPIs updated successfully. Employee has been notified to review changes.');
+            } else {
+                $this->session->set_flashdata('success', 'Scores updated successfully.');
+            }
             redirect('manager/view_employee/' . $employee_id);
             return;
         }
@@ -668,6 +720,13 @@ class Manager extends CI_Controller {
         $data['kpis'] = $this->kpi_model->get_employee_kpis($employee_id, $period_id);
         $data['period_id'] = $period_id;
         $data['page_title'] = 'Edit Employee KPIs';
+        
+        // Check if employee has agreed (for conditional display)
+        $data['employee_has_agreed'] = false;
+        if (!empty($data['kpis'])) {
+            $first_kpi = $data['kpis'][0];
+            $data['employee_has_agreed'] = ($first_kpi->employee_agreement_status === 'AGREED');
+        }
         
         $this->load->view('common/header', $data);
         $this->load->view('manager/edit_employee_kpis', $data);
@@ -774,13 +833,23 @@ class Manager extends CI_Controller {
             return;
         }
         
-        // Add the manager's message
+        // Determine the phase based on employee agreement status
+        $kpi = $this->kpi_model->get_kpi_by_id($employee_kpi_id);
+        $phase = 'SETUP'; // Default to setup
+        
+        if ($kpi && $kpi->employee_agreement_status === 'AGREED') {
+            // If employee has agreed, we're in scoring phase
+            $phase = 'SCORING';
+        }
+        
+        // Add the manager's message with appropriate phase
         $result = $this->kpi_model->add_chat_message(
             $employee_kpi_id,
             $employee_id,
             $manager_id,
             'MANAGER',
-            $message
+            $message,
+            $phase
         );
         
         if ($result) {

@@ -50,15 +50,7 @@
         </div>
 
         <!-- Total Score Card -->
-        <div class="col-md-4">
-            <div class="card kpi-card">
-                <div class="card-body total-score text-center">
-                    <h5 class="mb-3"><i class="fas fa-trophy"></i> Total Score</h5>
-                    <h1 class="display-3 mb-0"><?php echo number_format($total_score, 2); ?></h1>
-                    <p class="mb-0">out of 100</p>
-                </div>
-            </div>
-        </div>
+        
 
         <!-- Total Weightage Card -->
         <div class="col-md-4">
@@ -343,8 +335,8 @@
                             </table>
                         </div>
                         
-                        <!-- Request Edit Button -->
-                        <?php if (!empty($kpis) && $active_period): ?>
+                        <!-- Request Edit Button - Only show in Setup Mode (before agreement and not finalized) -->
+                        <?php if (!empty($kpis) && $active_period && !$has_agreed && !$is_finalized): ?>
                         <div class="mt-3 text-center">
                             <a href="<?php echo base_url('employee/request_kpi_edit?period_id=' . $active_period->period_id); ?>" 
                                class="btn btn-warning btn-lg">
@@ -353,6 +345,22 @@
                             <small class="d-block mt-2 text-muted">
                                 Click here if you want to request changes to your assigned KPIs
                             </small>
+                        </div>
+                        <?php elseif ($is_finalized): ?>
+                        <!-- Show finalized message -->
+                        <div class="mt-3 text-center">
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle"></i> <strong>Performance Review Finalized</strong><br>
+                                <small>Your performance review for this period has been completed and locked.</small>
+                            </div>
+                        </div>
+                        <?php elseif ($has_agreed): ?>
+                        <!-- Show scoring mode message -->
+                        <div class="mt-3 text-center">
+                            <div class="alert alert-info">
+                                <i class="fas fa-chart-line"></i> <strong>Performance Evaluation in Progress</strong><br>
+                                <small>Your manager is adding scores. Visit <a href="<?php echo base_url('employee/my_kpis'); ?>">My KPIs</a> page to review and accept final report.</small>
+                            </div>
                         </div>
                         <?php endif; ?>
                     <?php endif; ?>

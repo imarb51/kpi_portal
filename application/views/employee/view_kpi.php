@@ -13,7 +13,7 @@
                 <i class="fas fa-arrow-left"></i> Back to My KPIs
             </a>
             <a href="<?php echo base_url('employee/request_edit/' . $kpi->employee_kpi_id); ?>" class="btn btn-warning">
-                <i class="fas fa-edit"></i> Request Edit
+                <i class="fas fa-edit"></i> Reques t Edit
             </a>
         </div>
 

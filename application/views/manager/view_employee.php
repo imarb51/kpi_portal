@@ -222,62 +222,166 @@
     <?php if ($has_bulk_edit_request): ?>
     <div class="row mt-4">
         <div class="col-md-12">
-            <div class="card border-warning">
-                <div class="card-header bg-warning text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-comments"></i> KPI Edit Request Conversation
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <!-- Chat Messages -->
-                    <div class="chat-container" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; background-color: #f8f9fa;">
-                        <?php if (!empty($chat_messages)): ?>
-                            <?php foreach ($chat_messages as $msg): ?>
-                                <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
-                                    <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
-                                        <div class="mb-1">
-                                            <strong>
-                                                <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
-                                                    <i class="fas fa-user text-primary"></i>
-                                                <?php elseif ($msg->sender_type === 'MANAGER'): ?>
-                                                    <i class="fas fa-user-tie text-success"></i>
-                                                <?php else: ?>
-                                                    <i class="fas fa-user-shield text-danger"></i>
-                                                <?php endif; ?>
-                                                <?= $msg->first_name . ' ' . $msg->last_name ?>
-                                            </strong>
-                                            <small class="text-muted">(<?= $msg->sender_type ?>)</small>
+            
+            <?php if (isset($show_both_chats) && $show_both_chats): ?>
+                <!-- SETUP MODE CONVERSATION (Read-Only / Collapsed) -->
+                <?php if (!empty($setup_chat_messages)): ?>
+                <div class="card border-secondary mb-3">
+                    <div class="card-header bg-secondary text-white" style="cursor: pointer;" data-toggle="collapse" data-target="#setupConversationManager">
+                        <h6 class="mb-0">
+                            <i class="fas fa-history"></i> Setup Mode Discussion (Completed)
+                            <small class="float-right"><i class="fas fa-chevron-down"></i></small>
+                        </h6>
+                    </div>
+                    <div id="setupConversationManager" class="collapse">
+                        <div class="card-body" style="background-color: #f5f5f5;">
+                            <div class="chat-container" style="max-height: 300px; overflow-y: auto; padding: 10px;">
+                                <?php foreach ($setup_chat_messages as $msg): ?>
+                                    <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
+                                        <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
+                                            <div class="mb-1">
+                                                <strong>
+                                                    <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
+                                                        <i class="fas fa-user text-primary"></i>
+                                                    <?php elseif ($msg->sender_type === 'MANAGER'): ?>
+                                                        <i class="fas fa-user-tie text-success"></i>
+                                                    <?php else: ?>
+                                                        <i class="fas fa-user-shield text-danger"></i>
+                                                    <?php endif; ?>
+                                                    <?= $msg->first_name . ' ' . $msg->last_name ?>
+                                                </strong>
+                                                <small class="text-muted">(<?= $msg->sender_type ?>)</small>
+                                            </div>
+                                            <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
                                         </div>
-                                        <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
-                                        <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
                                     </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="alert alert-info mb-0">
-                                <p class="mb-2">
-                                    <strong><i class="fas fa-user"></i> Employee:</strong> 
-                                    <?php echo $employee->first_name . ' ' . $employee->last_name; ?>
-                                </p>
-                                <p class="mb-2">
-                                    <strong><i class="fas fa-calendar"></i> Request Date:</strong> 
-                                    <?php echo date('M d, Y H:i', strtotime($bulk_edit_date)); ?>
-                                </p>
-                                <p class="mb-0">
-                                    <strong><i class="fas fa-comment"></i> Employee's Initial Request:</strong><br>
-                                    <em><?php echo nl2br(htmlspecialchars($bulk_edit_notes)); ?></em>
-                                </p>
+                                <?php endforeach; ?>
                             </div>
+                            <div class="alert alert-secondary mb-0 mt-2">
+                                <i class="fas fa-check-circle"></i> <strong>Setup Phase Completed</strong> - This conversation is now read-only.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- SCORING MODE CONVERSATION (Active or Read-Only) -->
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-comments"></i> Performance Evaluation Discussion
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="chat-container" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; background-color: #f8f9fa;">
+                            <?php if (!empty($scoring_chat_messages)): ?>
+                                <?php foreach ($scoring_chat_messages as $msg): ?>
+                                    <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
+                                        <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
+                                            <div class="mb-1">
+                                                <strong>
+                                                    <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
+                                                        <i class="fas fa-user text-primary"></i>
+                                                    <?php elseif ($msg->sender_type === 'MANAGER'): ?>
+                                                        <i class="fas fa-user-tie text-success"></i>
+                                                    <?php else: ?>
+                                                        <i class="fas fa-user-shield text-danger"></i>
+                                                    <?php endif; ?>
+                                                    <?= $msg->first_name . ' ' . $msg->last_name ?>
+                                                </strong>
+                                                <small class="text-muted">(<?= $msg->sender_type ?>)</small>
+                                            </div>
+                                            <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <p class="text-muted text-center mb-0">No scoring discussion yet.</p>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Manager Response Form -->
+                        <?php if ($chat_is_locked): ?>
+                            <div class="alert alert-success mt-3 mb-0">
+                                <i class="fas fa-lock"></i> <strong>Performance Evaluation Completed</strong><br>
+                                The employee has accepted the final report. The conversation has been closed.
+                            </div>
+                        <?php else: ?>
+                            <form method="post" action="<?= base_url('manager/send_kpi_chat_message') ?>">
+                                <input type="hidden" name="employee_kpi_id" value="<?= $edit_request_employee_kpi_id ?>">
+                                <input type="hidden" name="employee_id" value="<?= $employee->employee_id ?>">
+                                <input type="hidden" name="period_id" value="<?= $active_period->period_id ?>">
+                                <div class="form-group mb-2">
+                                    <textarea name="message" class="form-control" rows="3" placeholder="Type your response..." required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-paper-plane"></i> Send Response
+                                </button>
+                            </form>
                         <?php endif; ?>
                     </div>
-
-                    <!-- Manager Response Form -->
-                    <?php if ($chat_is_locked): ?>
-                        <div class="alert alert-success mt-3 mb-0">
-                            <i class="fas fa-lock"></i> <strong>KPIs Locked</strong><br>
-                            The employee has agreed to these KPIs. The conversation has been closed and KPIs are now locked.
+                </div>
+            
+            <?php else: ?>
+                <!-- SINGLE CONVERSATION (Setup Mode Only) -->
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-comments"></i> KPI Edit Request Conversation
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Chat Messages -->
+                        <div class="chat-container" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; background-color: #f8f9fa;">
+                            <?php if (!empty($chat_messages)): ?>
+                                <?php foreach ($chat_messages as $msg): ?>
+                                    <div class="chat-message mb-3 <?= $msg->sender_type === 'EMPLOYEE' ? 'text-left' : 'text-right' ?>">
+                                        <div class="d-inline-block p-3 rounded" style="max-width: 70%; <?= $msg->sender_type === 'EMPLOYEE' ? 'background-color: #e3f2fd;' : 'background-color: #fff3cd;' ?>">
+                                            <div class="mb-1">
+                                                <strong>
+                                                    <?php if ($msg->sender_type === 'EMPLOYEE'): ?>
+                                                        <i class="fas fa-user text-primary"></i>
+                                                    <?php elseif ($msg->sender_type === 'MANAGER'): ?>
+                                                        <i class="fas fa-user-tie text-success"></i>
+                                                    <?php else: ?>
+                                                        <i class="fas fa-user-shield text-danger"></i>
+                                                    <?php endif; ?>
+                                                    <?= $msg->first_name . ' ' . $msg->last_name ?>
+                                                </strong>
+                                                <small class="text-muted">(<?= $msg->sender_type ?>)</small>
+                                            </div>
+                                            <p class="mb-1"><?= nl2br(htmlspecialchars($msg->message)) ?></p>
+                                            <small class="text-muted"><?= date('M d, Y H:i', strtotime($msg->created_at)) ?></small>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="alert alert-info mb-0">
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-user"></i> Employee:</strong> 
+                                        <?php echo $employee->first_name . ' ' . $employee->last_name; ?>
+                                    </p>
+                                    <p class="mb-2">
+                                        <strong><i class="fas fa-calendar"></i> Request Date:</strong> 
+                                        <?php echo date('M d, Y H:i', strtotime($bulk_edit_date)); ?>
+                                    </p>
+                                    <p class="mb-0">
+                                        <strong><i class="fas fa-comment"></i> Employee's Initial Request:</strong><br>
+                                        <em><?php echo nl2br(htmlspecialchars($bulk_edit_notes)); ?></em>
+                                    </p>
+                                </div>
+                            <?php endif; ?>
                         </div>
-                    <?php else: ?>
+
+                        <!-- Manager Response Form -->
+                        <?php if ($chat_is_locked): ?>
+                            <div class="alert alert-success mt-3 mb-0">
+                                <i class="fas fa-lock"></i> <strong>KPIs Locked</strong><br>
+                                The employee has agreed to these KPIs. The conversation has been closed and KPIs are now locked.
+                            </div>
+                        <?php else: ?>
                         <form method="post" action="<?= base_url('manager/send_kpi_chat_message') ?>">
                             <input type="hidden" name="employee_kpi_id" value="<?= $edit_request_employee_kpi_id ?>">
                             <input type="hidden" name="employee_id" value="<?= $employee->employee_id ?>">
@@ -295,17 +399,19 @@
                                        class="btn btn-warning">
                                         <i class="fas fa-edit"></i> Edit KPIs
                                     </a>
-                                    <a href="<?= base_url('manager/mark_kpi_agreed/' . $edit_request_employee_kpi_id) ?>" 
+                                    <!-- <a href="<?= base_url('manager/mark_kpi_agreed/' . $edit_request_employee_kpi_id) ?>" 
                                        class="btn btn-success"
                                        onclick="return confirm('Are you sure you want to lock these KPIs? This action cannot be undone.')">
                                         <i class="fas fa-lock"></i> Mark as Agreed & Lock
-                                    </a>
+                                    </a> -->
                                 </div>
                             </div>
                         </form>
                     <?php endif; ?>
                 </div>
             </div>
+            <?php endif; ?>
+            
         </div>
     </div>
     <?php endif; ?>

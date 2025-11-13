@@ -37,6 +37,17 @@ class Employee extends CI_Controller {
             
             // Check if review is finalized
             $data['is_finalized'] = $this->kpi_model->is_review_finalized($employee_id, $data['active_period']->period_id);
+            
+            // Check if employee has agreed (to determine if in Setup or Scoring mode)
+            $data['has_agreed'] = false;
+            if (!empty($data['kpis'])) {
+                foreach ($data['kpis'] as $kpi) {
+                    if ($kpi->employee_agreement_status === 'AGREED') {
+                        $data['has_agreed'] = true;
+                        break;
+                    }
+                }
+            }
         } else {
             // No active period - set defaults
             $data['kpis'] = [];
@@ -44,6 +55,7 @@ class Employee extends CI_Controller {
             $data['total_score'] = 0;
             $data['pending_requests_count'] = 0;
             $data['is_finalized'] = false;
+            $data['has_agreed'] = false;
         }
         
         // Get manager info
@@ -84,23 +96,66 @@ class Employee extends CI_Controller {
         $data['chat_messages'] = [];
         $data['chat_is_locked'] = false;
         $data['has_agreed'] = false;
+        $data['is_finalized'] = false;
+        $data['in_scoring_mode'] = false;
         
         if (!empty($data['kpis'])) {
             foreach ($data['kpis'] as $kpi) {
                 // Check if employee has agreed to KPIs
-                if ($kpi->is_locked || $kpi->employee_agreement_status === 'AGREED') {
+                // AGREED means employee accepted KPIs and moved to Scoring Mode
+                // PENDING, REQUESTED_EDIT, or any other status = Setup Mode
+                if ($kpi->employee_agreement_status === 'AGREED') {
                     $data['has_agreed'] = true;
+                    
+                    // Check if finalized (scores accepted)
+                    if (isset($kpi->is_finalized) && $kpi->is_finalized == 1) {
+                        $data['is_finalized'] = true;
+                    } else {
+                        // Agreed but not finalized = Scoring Mode
+                        $data['in_scoring_mode'] = true;
+                    }
                 }
                 
-                // Show chat if there are any messages (regardless of locked/agreed status)
-                $chat_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id);
-                
-                if (!empty($chat_messages)) {
+                // Determine which phase messages to show based on current state
+                $message_phase = NULL;
+                if (isset($kpi->is_finalized) && $kpi->is_finalized == 1) {
+                    // Finalized: Show both setup and scoring messages (read-only)
+                    $setup_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SETUP');
+                    $scoring_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SCORING');
+                    
                     $data['has_chat_conversation'] = true;
                     $data['chat_employee_kpi_id'] = $kpi->employee_kpi_id;
-                    $data['chat_messages'] = $chat_messages;
-                    $data['chat_is_locked'] = $kpi->is_locked || $kpi->employee_agreement_status === 'AGREED';
+                    $data['setup_chat_messages'] = $setup_messages;
+                    $data['scoring_chat_messages'] = $scoring_messages;
+                    $data['show_both_chats'] = true;
+                    $data['chat_is_locked'] = true;
                     break;
+                    
+                } elseif ($kpi->employee_agreement_status === 'AGREED') {
+                    // Scoring Mode: Show setup (read-only) and scoring (active)
+                    $setup_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SETUP');
+                    $scoring_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SCORING');
+                    
+                    $data['has_chat_conversation'] = true;
+                    $data['chat_employee_kpi_id'] = $kpi->employee_kpi_id;
+                    $data['setup_chat_messages'] = $setup_messages;
+                    $data['scoring_chat_messages'] = $scoring_messages;
+                    $data['show_both_chats'] = true;
+                    $data['chat_is_locked'] = false; // Active chat in scoring
+                    break;
+                    
+                } else {
+                    // Setup Mode: Show only setup phase messages
+                    $chat_messages = $this->kpi_model->get_kpi_chat_messages($kpi->employee_kpi_id, 'SETUP');
+                    
+                    if (!empty($chat_messages)) {
+                        $data['has_chat_conversation'] = true;
+                        $data['chat_employee_kpi_id'] = $kpi->employee_kpi_id;
+                        $data['chat_messages'] = $chat_messages;
+                        $data['show_both_chats'] = false;
+                        $data['chat_is_locked'] = false;
+                        break;
+                    }
                 }
             }
         }
@@ -134,13 +189,14 @@ class Employee extends CI_Controller {
             return;
         }
         
-        // Update all KPIs for this employee and period to AGREED and LOCK them
+        // Update all KPIs for this employee and period to AGREED (moves to Scoring Mode)
         $this->db->where('employee_id', $employee_id);
         $this->db->where('review_period_id', $period_id);
         $this->db->update('employee_kpis', [
             'employee_agreement_status' => 'AGREED',
             'employee_agreement_date' => date('Y-m-d H:i:s'),
-            'is_locked' => 1  // Lock KPIs when employee agrees
+            'is_locked' => 0,  // Don't lock yet - wait for finalization
+            'is_finalized' => 0  // Not finalized yet
         ]);
         
         if ($this->db->affected_rows() > 0) {
@@ -166,6 +222,56 @@ class Employee extends CI_Controller {
     }
 
     /**
+     * Finalize KPIs (accept final scores)
+     */
+    public function finalize_kpis() {
+        $employee_id = $this->session->userdata('employee_id');
+        $period_id = $this->input->post('period_id');
+        
+        if (!$period_id) {
+            $this->session->set_flashdata('error', 'Invalid period');
+            redirect('employee/my_kpis');
+            return;
+        }
+        
+        // Update all KPIs for this employee and period to FINALIZED
+        $this->db->where('employee_id', $employee_id);
+        $this->db->where('review_period_id', $period_id);
+        $this->db->update('employee_kpis', [
+            'is_finalized' => 1,
+            'finalized_at' => date('Y-m-d H:i:s'),
+            'is_locked' => 1  // Now lock everything
+        ]);
+        
+        if ($this->db->affected_rows() > 0) {
+            // Send notification to managers about finalization
+            $this->load->model('employee_model');
+            $managers = $this->employee_model->get_employee_managers($employee_id);
+            
+            if (!empty($managers)) {
+                $this->load->helper('email');
+                $employee = $this->employee_model->get_by_id($employee_id);
+                
+                foreach ($managers as $manager) {
+                    // Send email notification about finalization
+                    if (!empty($manager->email)) {
+                        $subject = "KPI Performance Review Finalized - " . $employee->first_name . " " . $employee->last_name;
+                        $message = "Employee " . $employee->first_name . " " . $employee->last_name . " has accepted the final performance scores for period " . $period_id;
+                        // You can create a proper email helper function for this
+                        mail($manager->email, $subject, $message);
+                    }
+                }
+            }
+            
+            $this->session->set_flashdata('success', 'Thank you! You have successfully accepted the final performance review.');
+        } else {
+            $this->session->set_flashdata('error', 'No KPIs found to finalize');
+        }
+        
+        redirect('employee/my_kpis?period_id=' . $period_id);
+    }
+
+    /**
      * Request edit for KPIs
      */
     public function request_kpi_edit() {
@@ -181,18 +287,40 @@ class Employee extends CI_Controller {
                 return;
             }
             
-            // Update all KPIs for this employee and period to REQUESTED_EDIT
-            $this->db->where('employee_id', $employee_id);
-            $this->db->where('review_period_id', $period_id);
-            $this->db->update('employee_kpis', [
-                'employee_agreement_status' => 'REQUESTED_EDIT',
-                'employee_agreement_date' => date('Y-m-d H:i:s'),
-                'employee_agreement_notes' => $notes
-            ]);
+            // Check if employee has already agreed (to determine phase)
+            $kpis = $this->kpi_model->get_employee_kpis($employee_id, $period_id);
+            $has_agreed = false;
+            $message_phase = 'SETUP'; // Default to setup phase
+            
+            if (!empty($kpis)) {
+                $has_agreed = ($kpis[0]->employee_agreement_status === 'AGREED');
+                if ($has_agreed) {
+                    $message_phase = 'SCORING'; // If agreed, we're in scoring phase
+                }
+            }
+            
+            // Update KPIs based on current phase
+            if ($has_agreed) {
+                // Scoring Mode: Keep AGREED status, just update notes for conversation
+                $this->db->where('employee_id', $employee_id);
+                $this->db->where('review_period_id', $period_id);
+                $this->db->update('employee_kpis', [
+                    'employee_agreement_notes' => $notes,
+                    'employee_agreement_date' => date('Y-m-d H:i:s')
+                ]);
+            } else {
+                // Setup Mode: Set to REQUESTED_EDIT
+                $this->db->where('employee_id', $employee_id);
+                $this->db->where('review_period_id', $period_id);
+                $this->db->update('employee_kpis', [
+                    'employee_agreement_status' => 'REQUESTED_EDIT',
+                    'employee_agreement_date' => date('Y-m-d H:i:s'),
+                    'employee_agreement_notes' => $notes
+                ]);
+            }
             
             if ($this->db->affected_rows() > 0) {
-                // Add chat message only once (for the first KPI in the period)
-                $kpis = $this->kpi_model->get_employee_kpis($employee_id, $period_id);
+                // Add chat message with appropriate phase
                 if (!empty($kpis)) {
                     // Only add message to the first KPI to avoid duplicates
                     $this->kpi_model->add_chat_message(
@@ -200,7 +328,8 @@ class Employee extends CI_Controller {
                         $employee_id,
                         $employee_id,
                         'EMPLOYEE',
-                        $notes
+                        $notes,
+                        $message_phase // Use detected phase (SETUP or SCORING)
                     );
                 }
                 // Send notification to all managers
@@ -639,13 +768,23 @@ class Employee extends CI_Controller {
             return;
         }
         
-        // Add the employee's reply message
+        // Determine the phase based on employee agreement status
+        $kpi = $this->kpi_model->get_kpi_by_id($employee_kpi_id);
+        $phase = 'SETUP'; // Default to setup
+        
+        if ($kpi && $kpi->employee_agreement_status === 'AGREED') {
+            // If employee has agreed, we're in scoring phase
+            $phase = 'SCORING';
+        }
+        
+        // Add the employee's reply message with appropriate phase
         $result = $this->kpi_model->add_chat_message(
             $employee_kpi_id,
             $employee_id,
             $employee_id,
             'EMPLOYEE',
-            $message
+            $message,
+            $phase
         );
         
         if ($result) {

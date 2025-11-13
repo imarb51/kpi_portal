@@ -1,7 +1,23 @@
 <div class="page-header">
     <h2><i class="fas fa-edit"></i> Edit Employee KPIs</h2>
-    <p class="mb-0">Update KPI weightages for <?= htmlspecialchars($employee->first_name . ' ' . $employee->last_name) ?></p>
+    <p class="mb-0">
+        <?php if ($employee_has_agreed): ?>
+            Update scores for <?= htmlspecialchars($employee->first_name . ' ' . $employee->last_name) ?>
+        <?php else: ?>
+            Update KPI weightages for <?= htmlspecialchars($employee->first_name . ' ' . $employee->last_name) ?>
+        <?php endif; ?>
+    </p>
 </div>
+
+<?php if ($employee_has_agreed): ?>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle"></i> <strong>Scoring Mode:</strong> Employee has agreed to the KPIs. You can now add/edit scores (0-5 scale). Weightages are locked.
+</div>
+<?php else: ?>
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i> <strong>Setup Mode:</strong> Employee has not agreed yet. You can adjust weightages and KPI tasks. Scores will be available after employee agreement.
+</div>
+<?php endif; ?>
 
 <div class="content-wrapper">
     <div class="row">
@@ -22,13 +38,15 @@
                             <table class="table table-bordered">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th style="width: 10%;">Weightage (%)</th>
-                                        <th style="width: 30%;">KPI Name / Task</th>
+                                        <th style="width: <?= $employee_has_agreed ? '12%' : '10%' ?>;">Weightage (%)</th>
+                                        <th style="width: <?= $employee_has_agreed ? '28%' : '30%' ?>;">KPI Name / Task</th>
+                                        <?php if ($employee_has_agreed): ?>
                                         <th style="width: 10%;">Score (out of 5)</th>
                                         <th style="width: 12%;">Weighted Score</th>
+                                        <th style="width: 18%;">Remark</th>
+                                        <?php endif; ?>
                                         <th style="width: 15%;">Category</th>
-                                        <th style="width: 15%;">Remark</th>
-                                        <th style="width: 8%;">Actions</th>
+                                        <th style="width: <?= $employee_has_agreed ? '5%' : '8%' ?>;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -61,9 +79,10 @@
                                     ?>
                                         <!-- Category Header -->
                                         <tr class="table-info category-header" data-category="<?= htmlspecialchars($category) ?>" data-category-id="<?= $categories_info[$category] ?>">
-                                            <td colspan="6">
+                                            <td colspan="<?= $employee_has_agreed ? '5' : '6' ?>">
                                                 <strong><i class="fas fa-folder"></i> <?= htmlspecialchars($category) ?></strong>
                                             </td>
+                                            <?php if (!$employee_has_agreed): ?>
                                             <td class="text-center">
                                                 <button type="button" class="btn btn-sm btn-success add-kpi-btn" 
                                                         data-category="<?= htmlspecialchars($category) ?>"
@@ -72,24 +91,44 @@
                                                     <i class="fas fa-plus"></i> Add
                                                 </button>
                                             </td>
+                                            <?php else: ?>
+                                            <td class="text-center">
+                                                <span class="text-muted" title="Cannot add KPIs after employee agreement">
+                                                    <i class="fas fa-lock"></i>
+                                                </span>
+                                            </td>
+                                            <?php endif; ?>
                                         </tr>
                                         <!-- KPI Rows -->
                                         <?php foreach ($category_kpis as $kpi): ?>
                                         <tr class="kpi-row" data-category="<?= htmlspecialchars($category) ?>">
                                             <td>
-                                                <input type="number" 
-                                                       class="form-control weightage-input" 
-                                                       name="kpis[<?= $kpi->employee_kpi_id ?>][weightage]" 
-                                                       min="0" 
-                                                       max="100" 
-                                                       step="0.1" 
-                                                       value="<?= number_format($kpi->weightage, 1) ?>" 
-                                                       required 
-                                                       onchange="calculateTotal()">
+                                                <?php if ($employee_has_agreed): ?>
+                                                    <!-- Locked weightage after agreement -->
+                                                    <input type="number" 
+                                                           class="form-control weightage-input" 
+                                                           name="kpis[<?= $kpi->employee_kpi_id ?>][weightage]" 
+                                                           value="<?= number_format($kpi->weightage, 1) ?>" 
+                                                           readonly 
+                                                           style="background-color: #e9ecef;">
+                                                <?php else: ?>
+                                                    <!-- Editable weightage before agreement -->
+                                                    <input type="number" 
+                                                           class="form-control weightage-input" 
+                                                           name="kpis[<?= $kpi->employee_kpi_id ?>][weightage]" 
+                                                           min="0" 
+                                                           max="100" 
+                                                           step="0.1" 
+                                                           value="<?= number_format($kpi->weightage, 1) ?>" 
+                                                           required 
+                                                           onchange="calculateTotal()">
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <strong><?= htmlspecialchars($kpi->kpi_name) ?></strong>
                                             </td>
+                                            <?php if ($employee_has_agreed): ?>
+                                            <!-- Show score fields only after agreement -->
                                             <td>
                                                 <input type="number" 
                                                        class="form-control score-input" 
@@ -111,22 +150,30 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                <span class="badge badge-info"><?= htmlspecialchars($kpi->category_name) ?></span>
-                                            </td>
-                                            <td>
                                                 <input type="text" 
                                                        class="form-control form-control-sm" 
-                                                       name="kpis[<?= $kpi->employee_kpi_id ?>][description]" 
-                                                       value="<?= htmlspecialchars($kpi->description ?: '') ?>" 
+                                                       name="kpis[<?= $kpi->employee_kpi_id ?>][remark]" 
+                                                       value="<?= htmlspecialchars($kpi->remark ?: '') ?>" 
                                                        placeholder="Add remark">
                                             </td>
+                                            <?php endif; ?>
+                                            <td>
+                                                <span class="badge badge-info"><?= htmlspecialchars($kpi->category_name) ?></span>
+                                            </td>
                                             <td class="text-center">
-                                                <button type="button" class="btn btn-sm btn-danger delete-kpi-btn" 
-                                                        data-kpi-id="<?= $kpi->employee_kpi_id ?>"
-                                                        title="Delete this KPI">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                                <input type="hidden" name="delete_kpis[]" value="" class="delete-flag">
+                                                <?php if (!$employee_has_agreed): ?>
+                                                    <!-- Only allow deletion before employee agrees -->
+                                                    <button type="button" class="btn btn-sm btn-danger delete-kpi-btn" 
+                                                            data-kpi-id="<?= $kpi->employee_kpi_id ?>"
+                                                            title="Delete this KPI">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                    <input type="hidden" name="delete_kpis[]" value="" class="delete-flag">
+                                                <?php else: ?>
+                                                    <span class="text-muted" title="Cannot delete after employee agreement">
+                                                        <i class="fas fa-lock"></i>
+                                                    </span>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                         <?php endforeach; ?>
@@ -145,6 +192,7 @@
                                         <td>
                                             <strong>Total Weightage</strong>
                                         </td>
+                                        <?php if ($employee_has_agreed): ?>
                                         <td class="text-center">
                                             <h5 class="mb-0">
                                                 <span id="averageScore" class="badge badge-info">0.00</span>
@@ -155,9 +203,14 @@
                                                 <span id="totalWeightedScore" class="badge badge-success">0.00</span>
                                             </h5>
                                         </td>
-                                        <td colspan="3">
+                                        <td colspan="2">
                                             <strong>Average Score / Total Weighted Score</strong>
                                         </td>
+                                        <?php else: ?>
+                                        <td colspan="2">
+                                            <em class="text-muted">Scores available after employee agrees</em>
+                                        </td>
+                                        <?php endif; ?>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -166,14 +219,21 @@
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle"></i> <strong>Note:</strong>
                             <ul class="mb-0 mt-2">
+                                <?php if ($employee_has_agreed): ?>
+                                <li>Weightages are now locked as employee has agreed to the KPIs</li>
+                                <li>You can add/edit scores (0-5 scale) for performance evaluation</li>
+                                <li>Scores will be visible to the employee after you save</li>
+                                <li>Weighted Score = (Score × Weightage) / 100</li>
+                                <?php else: ?>
                                 <li>Total weightage must equal 100%</li>
-                                <li>You can edit both weightage and scores in this form</li>
-                                <li>After saving, the employee will be notified to review and agree to the changes</li>
-                                <li>Employee must agree before final submission</li>
+                                <li>You can add, edit, or delete KPIs at this stage</li>
+                                <li>After saving, the employee will be notified to review and agree</li>
+                                <li>Scores can only be added AFTER employee agreement</li>
+                                <?php endif; ?>
                             </ul>
                         </div>
 
-                        <div class="form-group">
+                        <!-- <div class="form-group">
                             <label for="manager_notes"><strong><i class="fas fa-comment"></i> Response to Employee:</strong></label>
                             <textarea class="form-control" 
                                       id="manager_notes" 
@@ -183,10 +243,10 @@
                             <small class="form-text text-muted">
                                 This message will be sent to the employee along with the updated KPIs.
                             </small>
-                        </div>
+                        </div> -->
 
                         <div class="form-group">
-                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn" disabled>
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn" <?= $employee_has_agreed ? '' : 'disabled' ?>>
                                 <i class="fas fa-save"></i> Save Changes & Notify Employee
                             </button>
                             <?php
@@ -275,25 +335,43 @@ function calculateTotal() {
     // Update total weightage
     document.getElementById('totalWeightage').textContent = totalWeightage.toFixed(1);
     
-    // Update average score
-    const averageScore = scoreCount > 0 ? (scoreSum / scoreCount) : 0;
-    document.getElementById('averageScore').textContent = averageScore.toFixed(2);
+    // Check if in scoring mode (employee has agreed)
+    const isScoreMode = <?= $employee_has_agreed ? 'true' : 'false' ?>;
     
-    // Update total weighted score
-    document.getElementById('totalWeightedScore').textContent = totalWeightedScore.toFixed(2);
+    // Update average score and total weighted score only in scoring mode
+    if (isScoreMode) {
+        const averageScore = scoreCount > 0 ? (scoreSum / scoreCount) : 0;
+        const avgScoreElement = document.getElementById('averageScore');
+        const totalWeightedElement = document.getElementById('totalWeightedScore');
+        
+        if (avgScoreElement) {
+            avgScoreElement.textContent = averageScore.toFixed(2);
+        }
+        if (totalWeightedElement) {
+            totalWeightedElement.textContent = totalWeightedScore.toFixed(2);
+        }
+    }
     
     const warning = document.getElementById('weightageWarning');
     const submitBtn = document.getElementById('submitBtn');
     const badge = document.getElementById('totalWeightage');
     
-    if (Math.abs(totalWeightage - 100) > 0.1) {
-        warning.style.display = 'block';
-        submitBtn.disabled = true;
-        badge.className = 'badge badge-danger';
-    } else {
-        warning.style.display = 'none';
+    if (isScoreMode) {
+        // In scoring mode, always enable submit (weightages are locked)
         submitBtn.disabled = false;
         badge.className = 'badge badge-success';
+        if (warning) warning.style.display = 'none';
+    } else {
+        // In setup mode, validate weightage totals
+        if (Math.abs(totalWeightage - 100) > 0.1) {
+            warning.style.display = 'block';
+            submitBtn.disabled = true;
+            badge.className = 'badge badge-danger';
+        } else {
+            warning.style.display = 'none';
+            submitBtn.disabled = false;
+            badge.className = 'badge badge-success';
+        }
     }
 }
 

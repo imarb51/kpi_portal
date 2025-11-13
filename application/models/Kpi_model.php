@@ -63,7 +63,7 @@ class Kpi_model extends CI_Model {
         }
         
         $this->db->select('ekpi.*, kt.kpi_name, kt.description, kt.category_id, kc.category_name, 
-                          ks.weightage, ks.score, ks.weighted_score, ks.score_id,
+                          ks.weightage, ks.score, ks.weighted_score, ks.score_id, ks.remark,
                           rp.period_name, rp.period_type,
                           ekpi.employee_agreement_status, ekpi.employee_agreement_date, 
                           ekpi.employee_agreement_notes, ekpi.manager_response_notes,
@@ -85,7 +85,7 @@ class Kpi_model extends CI_Model {
      */
     public function get_kpi_by_id($employee_kpi_id) {
         $this->db->select('ekpi.*, kt.kpi_name, kt.description, kc.category_name, 
-                          ks.weightage, ks.score, ks.weighted_score, ks.score_id,
+                          ks.weightage, ks.score, ks.weighted_score, ks.score_id, ks.remark,
                           rp.period_name, rp.period_type, 
                           u.first_name, u.last_name, u.employee_code')
                  ->from('employee_kpis ekpi')
@@ -332,27 +332,35 @@ class Kpi_model extends CI_Model {
     /**
      * Get all chat messages for a specific employee_kpi_id
      */
-    public function get_kpi_chat_messages($employee_kpi_id) {
-        return $this->db->select('kem.*, u.first_name, u.last_name, u.employee_code')
-                        ->from('kpi_edit_messages kem')
-                        ->join('users u', 'kem.sender_id = u.user_id')
-                        ->where('kem.employee_kpi_id', $employee_kpi_id)
-                        ->order_by('kem.created_at', 'ASC')
+    public function get_kpi_chat_messages($employee_kpi_id, $phase = NULL) {
+        $this->db->select('kem.*, u.first_name, u.last_name, u.employee_code')
+                 ->from('kpi_edit_messages kem')
+                 ->join('users u', 'kem.sender_id = u.user_id')
+                 ->where('kem.employee_kpi_id', $employee_kpi_id);
+        
+        // Filter by phase if specified
+        if ($phase !== NULL) {
+            $this->db->where('kem.phase', $phase);
+        }
+        
+        return $this->db->order_by('kem.created_at', 'ASC')
                         ->get()
                         ->result();
     }
     
     /**
      * Add a new message to the chat
+     * $phase: 'SETUP' for setup mode conversations, 'SCORING' for scoring mode conversations
      */
-    public function add_chat_message($employee_kpi_id, $employee_id, $sender_id, $sender_type, $message) {
+    public function add_chat_message($employee_kpi_id, $employee_id, $sender_id, $sender_type, $message, $phase = 'SETUP') {
         $data = [
             'message_id' => $this->generate_uuid(),
             'employee_kpi_id' => $employee_kpi_id,
             'employee_id' => $employee_id,
             'sender_id' => $sender_id,
             'sender_type' => $sender_type,
-            'message' => $message
+            'message' => $message,
+            'phase' => $phase
         ];
         
         return $this->db->insert('kpi_edit_messages', $data);
